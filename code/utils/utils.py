@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import wfdb
 import ast
-from sklearn.metrics import fbeta_score, roc_auc_score, roc_curve, roc_curve, auc
+from sklearn.metrics import fbeta_score, roc_auc_score, roc_curve, roc_curve, auc, f1_score
 from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
 from matplotlib.axes._axes import _log as matplotlib_axes_logger
 import warnings
@@ -33,7 +33,7 @@ def evaluate_experiment(y_true, y_pred, thresholds=None):
 
     # label based metric
     results['macro_auc'] = roc_auc_score(y_true, y_pred, average='macro')
-    
+
     df_result = pd.DataFrame(results, index=[0])
     return df_result
 
@@ -114,6 +114,7 @@ def apply_thresholds(preds, thresholds):
 # DATA PROCESSING STUFF
 
 def load_dataset(path, sampling_rate, release=False):
+
     if path.split('/')[-2] == 'ptbxl':
         # load and convert annotation data
         Y = pd.read_csv(path+'ptbxl_database.csv', index_col='ecg_id')
@@ -419,8 +420,8 @@ def ICBEBE_table(selection=None, folder='../output/'):
         me_res = pd.read_csv(folder+'exp_ICBEB/models/'+model+'/results/te_results.csv', index_col=0)
         mcol=[]
         for col in cols:
-            mean = me_res.ix['point'][col]
-            unc = max(me_res.ix['upper'][col]-me_res.ix['point'][col], me_res.ix['point'][col]-me_res.ix['lower'][col])
+            mean = me_res.iloc['point'][col]
+            unc = max(me_res.iloc['upper'][col]-me_res.iloc['point'][col], me_res.iloc['point'][col]-me_res.iloc['lower'][col])
             mcol.append("%.3f(%.2d)" %(np.round(mean,3), int(unc*1000)))
         data.append(mcol)
     data = np.array(data)
@@ -430,11 +431,10 @@ def ICBEBE_table(selection=None, folder='../output/'):
 
     df_rest = df[~df.index.isin(['naive', 'ensemble'])]
     df_rest = df_rest.sort_values('macro_auc', ascending=False)
-    our_work = 'https://arxiv.org/abs/2004.13701'
-    our_repo = 'https://github.com/helme/ecg_ptbxl_benchmarking/'
+
 
     md_source = '| Model | AUC &darr; |  F_beta=2 | G_beta=2 | paper/source | code | \n'
     md_source += '|---:|:---|:---|:---|:---|:---| \n'
     for i, row in enumerate(df_rest[cols].values):
-        md_source += '| ' + df_rest.index[i].replace('fastai_', '') + ' | ' + row[0] + ' | ' + row[1] + ' | ' + row[2] + ' | [our work]('+our_work+') | [this repo]('+our_repo+')| \n'
+        md_source += '| ' + df_rest.index[i].replace('fastai_', '') + ' | ' + row[0] + ' | ' + row[1] + ' | ' + row[2] + '| \n'
     print(md_source)
