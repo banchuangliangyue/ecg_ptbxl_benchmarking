@@ -100,10 +100,13 @@ class SCP_Experiment():
             elif modeltype == "fastai_model":
                 from models.fastai_model import fastai_model
                 model = fastai_model(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
-            elif modeltype == "YOUR_MODEL_TYPE":
+            elif modeltype == "NET1D":
                 # YOUR MODEL GOES HERE!
                 from models.your_model import YourModel
                 model = YourModel(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
+            elif modeltype == 'NET1D_ICBEB':
+                from models.your_model_icbeb import YourModel_ICBEBE
+                model = YourModel_ICBEBE(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
             else:
                 assert(True)
                 break
@@ -128,9 +131,9 @@ class SCP_Experiment():
         for model_description in os.listdir(self.outputfolder+self.experiment_name+'/models/'):
             if not model_description in ['ensemble', 'naive']:
                 mpath = self.outputfolder+self.experiment_name+'/models/'+model_description+'/'
-                ensemble_train.append(np.load(mpath+'y_train_pred.npy'))
-                ensemble_val.append(np.load(mpath+'y_val_pred.npy'))
-                ensemble_test.append(np.load(mpath+'y_test_pred.npy'))
+                ensemble_train.append(np.load(mpath+'y_train_pred.npy', allow_pickle=True))
+                ensemble_val.append(np.load(mpath+'y_val_pred.npy', allow_pickle=True))
+                ensemble_test.append(np.load(mpath+'y_test_pred.npy', allow_pickle=True))
         # dump mean predictions
         np.array(ensemble_train).mean(axis=0).dump(ensemblepath + 'y_train_pred.npy')
         np.array(ensemble_test).mean(axis=0).dump(ensemblepath + 'y_test_pred.npy')
@@ -160,6 +163,7 @@ class SCP_Experiment():
         #train_samples.dump(self.outputfolder+self.experiment_name+'/train_bootstrap_ids.npy')
         test_samples.dump(self.outputfolder+self.experiment_name+'/test_bootstrap_ids.npy')
         #val_samples.dump(self.outputfolder+self.experiment_name+'/val_bootstrap_ids.npy')
+        test_samples.dump(self.outputfolder+self.experiment_name+'/test_bootstrap_ids.npy')
 
         # iterate over all models fitted so far
         for m in sorted(os.listdir(self.outputfolder+self.experiment_name+'/models')):
@@ -170,7 +174,7 @@ class SCP_Experiment():
             # load predictions
             y_train_pred = np.load(mpath+'y_train_pred.npy', allow_pickle=True)
             #y_val_pred = np.load(mpath+'y_val_pred.npy', allow_pickle=True)
-            y_test_pred = np.load(mpath+'y_test_pred.npy', allow_pickle=True)
+            e = np.load(mpath+'y_test_pred.npy', allow_pickle=True)
 
             if self.experiment_name == 'exp_ICBEB':
                 # compute classwise thresholds such that recall-focused Gbeta is optimized
