@@ -6,12 +6,14 @@ import numpy as np
 import multiprocessing
 from itertools import repeat
 
+
 class SCP_Experiment():
     '''
         Experiment on SCP-ECG statements. All experiments based on SCP are performed and evaluated the same way.
     '''
 
-    def __init__(self, experiment_name, task, datafolder, outputfolder, models, sampling_frequency=100, min_samples=0, train_fold=8, val_fold=9, test_fold=10, folds_type='strat'):
+    def __init__(self, experiment_name, task, datafolder, outputfolder, models, sampling_frequency=100, min_samples=0,
+                 train_fold=8, val_fold=9, test_fold=10, folds_type='strat'):
         self.models = models
         self.min_samples = min_samples
         self.task = task
@@ -25,14 +27,14 @@ class SCP_Experiment():
         self.sampling_frequency = sampling_frequency
 
         # create folder structure if needed
-        if not os.path.exists(self.outputfolder+self.experiment_name):
-            os.makedirs(self.outputfolder+self.experiment_name)
-            if not os.path.exists(self.outputfolder+self.experiment_name+'/results/'):
-                os.makedirs(self.outputfolder+self.experiment_name+'/results/')
-            if not os.path.exists(outputfolder+self.experiment_name+'/models/'):
-                os.makedirs(self.outputfolder+self.experiment_name+'/models/')
-            if not os.path.exists(outputfolder+self.experiment_name+'/data/'):
-                os.makedirs(self.outputfolder+self.experiment_name+'/data/')
+        if not os.path.exists(self.outputfolder + self.experiment_name):
+            os.makedirs(self.outputfolder + self.experiment_name)
+            if not os.path.exists(self.outputfolder + self.experiment_name + '/results/'):
+                os.makedirs(self.outputfolder + self.experiment_name + '/results/')
+            if not os.path.exists(outputfolder + self.experiment_name + '/models/'):
+                os.makedirs(self.outputfolder + self.experiment_name + '/models/')
+            if not os.path.exists(outputfolder + self.experiment_name + '/data/'):
+                os.makedirs(self.outputfolder + self.experiment_name + '/data/')
 
     def prepare(self):
         # Load PTB-XL data
@@ -42,9 +44,10 @@ class SCP_Experiment():
         self.labels = utils.compute_label_aggregations(self.raw_labels, self.datafolder, self.task)
 
         # Select relevant data and convert to one-hot
-        self.data, self.labels, self.Y, _ = utils.select_data(self.data, self.labels, self.task, self.min_samples, self.outputfolder+self.experiment_name+'/data/')
+        self.data, self.labels, self.Y, _ = utils.select_data(self.data, self.labels, self.task, self.min_samples,
+                                                              self.outputfolder + self.experiment_name + '/data/')
         self.input_shape = self.data[0].shape
-        
+
         # 10th fold for testing (9th for now)
         self.X_test = self.data[self.labels.strat_fold == self.test_fold]
         self.y_test = self.Y[self.labels.strat_fold == self.test_fold]
@@ -55,28 +58,40 @@ class SCP_Experiment():
         self.X_train = self.data[self.labels.strat_fold <= self.train_fold]
         self.y_train = self.Y[self.labels.strat_fold <= self.train_fold]
 
+        print('val>>', self.X_val.shape)
+        print('test>>', self.X_test.shape)
+
+        # random crop trainset and slide cut validation/test
+        self.X_train = utils.random_crop(self.X_train, fs=100, crops=1)
+        self.y_train = utils.remark_label(self.y_train, crops=1)
+
+
+        self.X_val, self.y_val, self.pid_val = utils.slide_and_cut(self.X_val, self.y_val, window_size=250, stride=125)
+        self.X_test, self.y_test, self.pid_test = utils.slide_and_cut(self.X_test, self.y_test, window_size=250,stride=125)
+
         # Preprocess signal data
-        self.X_train, self.X_val, self.X_test = utils.preprocess_signals(self.X_train, self.X_val, self.X_test, self.outputfolder+self.experiment_name+'/data/')
+        self.X_train, self.X_val, self.X_test = utils.preprocess_signals(self.X_train, self.X_val, self.X_test,
+                                                                         self.outputfolder + self.experiment_name + '/data/')
         self.n_classes = self.y_train.shape[1]
 
         # save train and test labels
-        self.y_train.dump(self.outputfolder + self.experiment_name+ '/data/y_train.npy')
-        self.y_val.dump(self.outputfolder + self.experiment_name+ '/data/y_val.npy')
-        self.y_test.dump(self.outputfolder + self.experiment_name+ '/data/y_test.npy')
+        self.y_train.dump(self.outputfolder + self.experiment_name + '/data/y_train.npy')
+        self.y_val.dump(self.outputfolder + self.experiment_name + '/data/y_val.npy')
+        self.y_test.dump(self.outputfolder + self.experiment_name + '/data/y_test.npy')
 
-        modelname = 'naive'
-        # create most naive predictions via simple mean in training
-        mpath = self.outputfolder+self.experiment_name+'/models/'+modelname+'/'
-        # create folder for model outputs
-        if not os.path.exists(mpath):
-            os.makedirs(mpath)
-        if not os.path.exists(mpath+'results/'):
-            os.makedirs(mpath+'results/')
+    #        modelname = 'naive'
+    #        # create most naive predictions via simple mean in training
+    #        mpath = self.outputfolder+self.experiment_name+'/models/'+modelname+'/'
+    #        # create folder for model outputs
+    #        if not os.path.exists(mpath):
+    #            os.makedirs(mpath)
+    #        if not os.path.exists(mpath+'results/'):
+    #            os.makedirs(mpath+'results/')
 
-        mean_y = np.mean(self.y_train, axis=0)
-        np.array([mean_y]*len(self.y_train)).dump(mpath + 'y_train_pred.npy')
-        np.array([mean_y]*len(self.y_test)).dump(mpath + 'y_test_pred.npy')
-        np.array([mean_y]*len(self.y_val)).dump(mpath + 'y_val_pred.npy')
+    #        mean_y = np.mean(self.y_train, axis=0)
+    #        np.array([mean_y]*len(self.y_train)).dump(mpath + 'y_train_pred.npy')
+    #        np.array([mean_y]*len(self.y_test)).dump(mpath + 'y_test_pred.npy')
+    #        np.array([mean_y]*len(self.y_val)).dump(mpath + 'y_val_pred.npy')
 
     def perform(self):
 
@@ -85,96 +100,108 @@ class SCP_Experiment():
             modeltype = model_description['modeltype']
             modelparams = model_description['parameters']
 
-            mpath = self.outputfolder+self.experiment_name+'/models/'+modelname+'/'
+            mpath = self.outputfolder + self.experiment_name + '/models/' + modelname + '/'
             # create folder for model outputs
             if not os.path.exists(mpath):
                 os.makedirs(mpath)
-            if not os.path.exists(mpath+'results/'):
-                os.makedirs(mpath+'results/')
+            if not os.path.exists(mpath + 'results/'):
+                os.makedirs(mpath + 'results/')
 
             n_classes = self.Y.shape[1]
             # load respective model
             if modeltype == 'WAVELET':
                 from models.wavelet import WaveletModel
-                model = WaveletModel(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
+                model = WaveletModel(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape,
+                                     **modelparams)
             elif modeltype == "fastai_model":
                 from models.fastai_model import fastai_model
-                model = fastai_model(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
+                model = fastai_model(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape,
+                                     **modelparams)
             elif modeltype == "NET1D":
                 # YOUR MODEL GOES HERE!
                 from models.your_model import YourModel
                 model = YourModel(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
-            elif modeltype == 'NET1D_ICBEB':
-                from models.your_model_icbeb import YourModel_ICBEBE
-                model = YourModel_ICBEBE(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape, **modelparams)
+            elif modeltype == "NET1D_ICBEB":
+                # YOUR MODEL GOES HERE!
+                from models.your_model_icbeb import YourModel_ICBEB
+                model = YourModel_ICBEB(modelname, n_classes, self.sampling_frequency, mpath, self.input_shape,
+                                        **modelparams)
             else:
-                assert(True)
+                assert (True)
                 break
-
+            print(self.X_train.shape, self.y_train.shape)
             # fit model
-            model.fit(self.X_train, self.y_train, self.X_val, self.y_val)
+            model.fit(self.X_train, self.y_train, self.X_val, self.y_val, self.pid_val)
             # predict and dump
-            model.predict(self.X_train).dump(mpath+'y_train_pred.npy')
-            model.predict(self.X_val).dump(mpath+'y_val_pred.npy')
-            model.predict(self.X_test).dump(mpath+'y_test_pred.npy')
+            # model.predict(self.X_train).dump(mpath+'y_train_pred.npy')
+            model.predict(self.X_val, self.pid_val).dump(mpath + 'y_val_pred.npy')
+            model.predict(self.X_test, self.pid_test).dump(mpath + 'y_test_pred.npy')
 
-        modelname = 'ensemble'
-        # create ensemble predictions via simple mean across model predictions (except naive predictions)
-        ensemblepath = self.outputfolder+self.experiment_name+'/models/'+modelname+'/'
-        # create folder for model outputs
-        if not os.path.exists(ensemblepath):
-            os.makedirs(ensemblepath)
-        if not os.path.exists(ensemblepath+'results/'):
-            os.makedirs(ensemblepath+'results/')
-        # load all predictions
-        ensemble_train, ensemble_val, ensemble_test = [],[],[]
-        for model_description in os.listdir(self.outputfolder+self.experiment_name+'/models/'):
-            if not model_description in ['ensemble', 'naive']:
-                mpath = self.outputfolder+self.experiment_name+'/models/'+model_description+'/'
-                ensemble_train.append(np.load(mpath+'y_train_pred.npy', allow_pickle=True))
-                ensemble_val.append(np.load(mpath+'y_val_pred.npy', allow_pickle=True))
-                ensemble_test.append(np.load(mpath+'y_test_pred.npy', allow_pickle=True))
-        # dump mean predictions
-        np.array(ensemble_train).mean(axis=0).dump(ensemblepath + 'y_train_pred.npy')
-        np.array(ensemble_test).mean(axis=0).dump(ensemblepath + 'y_test_pred.npy')
-        np.array(ensemble_val).mean(axis=0).dump(ensemblepath + 'y_val_pred.npy')
+    #        modelname = 'ensemble'
+    #        # create ensemble predictions via simple mean across model predictions (except naive predictions)
+    #        ensemblepath = self.outputfolder+self.experiment_name+'/models/'+modelname+'/'
+    #        # create folder for model outputs
+    #        if not os.path.exists(ensemblepath):
+    #            os.makedirs(ensemblepath)
+    #        if not os.path.exists(ensemblepath+'results/'):
+    #            os.makedirs(ensemblepath+'results/')
+    #        # load all predictions
+    #        ensemble_train, ensemble_val, ensemble_test = [],[],[]
+    #        for model_description in os.listdir(self.outputfolder+self.experiment_name+'/models/'):
+    #            if not model_description in ['ensemble', 'naive']:
+    #                mpath = self.outputfolder+self.experiment_name+'/models/'+model_description+'/'
+    #                ensemble_train.append(np.load(mpath+'y_train_pred.npy', allow_pickle=True))
+    #                ensemble_val.append(np.load(mpath+'y_val_pred.npy', allow_pickle=True))
+    #                ensemble_test.append(np.load(mpath+'y_test_pred.npy', allow_pickle=True))
+    #        # dump mean predictions
+    #        np.array(ensemble_train).mean(axis=0).dump(ensemblepath + 'y_train_pred.npy')
+    #        np.array(ensemble_test).mean(axis=0).dump(ensemblepath + 'y_test_pred.npy')
+    #        np.array(ensemble_val).mean(axis=0).dump(ensemblepath + 'y_val_pred.npy')
 
-    def evaluate(self, n_bootstraping_samples=100, n_jobs=20, bootstrap_eval=True, dumped_bootstraps=True):
+    def evaluate(self, n_bootstraping_samples=100, n_jobs=20, bootstrap_eval=True, dumped_bootstraps=False):
 
         # get labels
-        y_train = np.load(self.outputfolder+self.experiment_name+'/data/y_train.npy', allow_pickle=True)
-        #y_val = np.load(self.outputfolder+self.experiment_name+'/data/y_val.npy', allow_pickle=True)
-        y_test = np.load(self.outputfolder+self.experiment_name+'/data/y_test.npy', allow_pickle=True)
+        # y_train = np.load(self.outputfolder+self.experiment_name+'/data/y_train.npy', allow_pickle=True)
+        # y_val = np.load(self.outputfolder+self.experiment_name+'/data/y_val.npy', allow_pickle=True)
+        y_test = np.load(self.outputfolder + self.experiment_name + '/data/y_test.npy', allow_pickle=True)
+
+        # aggrate label with same pid
+        y_test_gt = []
+        for pid in set(self.pid_test):
+            select_idx = (self.pid_test == pid)
+            tmp_gt = y_test[select_idx][0]
+            y_test_gt.append(tmp_gt)
+        y_test = np.array(y_test_gt)
 
         # if bootstrapping then generate appropriate samples for each
         if bootstrap_eval:
             if not dumped_bootstraps:
-                #train_samples = np.array(utils.get_appropriate_bootstrap_samples(y_train, n_bootstraping_samples))
+                # train_samples = np.array(utils.get_appropriate_bootstrap_samples(y_train, n_bootstraping_samples))
                 test_samples = np.array(utils.get_appropriate_bootstrap_samples(y_test, n_bootstraping_samples))
-                #val_samples = np.array(utils.get_appropriate_bootstrap_samples(y_val, n_bootstraping_samples))
+                # val_samples = np.array(utils.get_appropriate_bootstrap_samples(y_val, n_bootstraping_samples))
             else:
-                test_samples = np.load(self.outputfolder+self.experiment_name+'/test_bootstrap_ids.npy', allow_pickle=True)
+                test_samples = np.load(self.outputfolder + self.experiment_name + '/test_bootstrap_ids.npy',
+                                       allow_pickle=True)
         else:
-            #train_samples = np.array([range(len(y_train))])
+            # train_samples = np.array([range(len(y_train))])
             test_samples = np.array([range(len(y_test))])
-            #val_samples = np.array([range(len(y_val))])
+            # val_samples = np.array([range(len(y_val))])
 
         # store samples for future evaluations
-        #train_samples.dump(self.outputfolder+self.experiment_name+'/train_bootstrap_ids.npy')
-        test_samples.dump(self.outputfolder+self.experiment_name+'/test_bootstrap_ids.npy')
-        #val_samples.dump(self.outputfolder+self.experiment_name+'/val_bootstrap_ids.npy')
-        test_samples.dump(self.outputfolder+self.experiment_name+'/test_bootstrap_ids.npy')
+        # train_samples.dump(self.outputfolder+self.experiment_name+'/train_bootstrap_ids.npy')
+        test_samples.dump(self.outputfolder + self.experiment_name + '/test_bootstrap_ids.npy')
+        # val_samples.dump(self.outputfolder+self.experiment_name+'/val_bootstrap_ids.npy')
 
         # iterate over all models fitted so far
-        for m in sorted(os.listdir(self.outputfolder+self.experiment_name+'/models')):
+        for m in sorted(os.listdir(self.outputfolder + self.experiment_name + '/models')):
             print(m)
-            mpath = self.outputfolder+self.experiment_name+'/models/'+m+'/'
-            rpath = self.outputfolder+self.experiment_name+'/models/'+m+'/results/'
+            mpath = self.outputfolder + self.experiment_name + '/models/' + m + '/'
+            rpath = self.outputfolder + self.experiment_name + '/models/' + m + '/results/'
 
             # load predictions
-            y_train_pred = np.load(mpath+'y_train_pred.npy', allow_pickle=True)
-            #y_val_pred = np.load(mpath+'y_val_pred.npy', allow_pickle=True)
-            e = np.load(mpath+'y_test_pred.npy', allow_pickle=True)
+            # y_train_pred = np.load(mpath+'y_train_pred.npy', allow_pickle=True)
+            # y_val_pred = np.load(mpath+'y_val_pred.npy', allow_pickle=True)
+            y_test_pred = np.load(mpath + 'y_test_pred.npy', allow_pickle=True)
 
             if self.experiment_name == 'exp_ICBEB':
                 # compute classwise thresholds such that recall-focused Gbeta is optimized
@@ -195,15 +222,16 @@ class SCP_Experiment():
             #     columns=tr_df.columns,
             #     index=['point', 'mean', 'lower', 'upper'])
 
-            te_df = pd.concat(pool.starmap(utils.generate_results, zip(test_samples, repeat(y_test), repeat(y_test_pred), repeat(thresholds))))
+            te_df = pd.concat(pool.starmap(utils.generate_results,
+                                           zip(test_samples, repeat(y_test), repeat(y_test_pred), repeat(thresholds))))
             te_df_point = utils.generate_results(range(len(y_test)), y_test, y_test_pred, thresholds)
             te_df_result = pd.DataFrame(
                 np.array([
-                    te_df_point.mean().values, 
+                    te_df_point.mean().values,
                     te_df.mean().values,
                     te_df.quantile(0.05).values,
-                    te_df.quantile(0.95).values]), 
-                columns=te_df.columns, 
+                    te_df.quantile(0.95).values]),
+                columns=te_df.columns,
                 index=['point', 'mean', 'lower', 'upper'])
 
             # val_df = pd.concat(pool.starmap(utils.generate_results, zip(val_samples, repeat(y_val), repeat(y_val_pred), repeat(thresholds))))
@@ -220,6 +248,6 @@ class SCP_Experiment():
             pool.close()
 
             # dump results
-            #tr_df_result.to_csv(rpath+'tr_results.csv')
-            #val_df_result.to_csv(rpath+'val_results.csv')
-            te_df_result.to_csv(rpath+'te_results.csv')
+            # tr_df_result.to_csv(rpath+'tr_results.csv')
+            # val_df_result.to_csv(rpath+'val_results.csv')
+            te_df_result.to_csv(rpath + 'te_results.csv')
